@@ -1,0 +1,22 @@
+[
+	{
+		"name":		"Terrible Thanks for Asking",
+		"rss":		"https://feeds.publicradio.org/public_feeds/terrible-thanks-for-asking/itunes/rss"
+	},
+	{
+		"name":		"Reply All",
+		"rss":		"http://feeds.gimletmedia.com/hearreplyall"
+	},
+	{
+		"name":		"Serial Killers",
+		"rss":		"https://feeds.megaphone.fm/END1032105222"
+	},
+	{
+		"name":		"Heavyweight",
+		"rss":		"https://feeds.megaphone.fm/heavyweight"
+	},
+	{
+		"name":		"Crimetown",
+		"rss":		"https://feeds.megaphone.fm/crimetown"
+	}
+]

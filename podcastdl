@@ -1,0 +1,132 @@
+#!/usr/bin/python3
+#	podcastdl - Podcast Downloader Script
+#	Copyright (C) 2019-2019 Johannes Bauer
+#
+#	This file is part of podcastdl.
+#
+#	podcastdl is free software; you can redistribute it and/or modify
+#	it under the terms of the GNU General Public License as published by
+#	the Free Software Foundation; this program is ONLY licensed under
+#	version 3 of the License, later versions are explicitly excluded.
+#
+#	podcastdl is distributed in the hope that it will be useful,
+#	but WITHOUT ANY WARRANTY; without even the implied warranty of
+#	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#	GNU General Public License for more details.
+#
+#	You should have received a copy of the GNU General Public License
+#	along with podcastdl; if not, write to the Free Software
+#	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+#	Johannes Bauer <JohannesBauer@gmx.de>
+
+import os
+import sys
+import json
+import time
+import requests
+import re
+import datetime
+from XMLParser import XMLParser
+from FriendlyArgumentParser import FriendlyArgumentParser
+
+class PodcastDownloader():
+	_PATH_RE = re.compile("[^-_A-Za-z0-9]")
+	_DATETIME_RE = re.compile("[A-Za-z]{3}, (?P<day>\d+) (?P<month>[A-Za-z]{3}) (?P<year>\d{4}) (?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2}) (?P<tzsign>[-+])(?P<tzhrs>\d{2})(?P<tzmins>\d{2})")
+	_MONTHS = {
+		"jan":	1,
+		"feb":	2,
+		"mar":	3,
+		"apr":	4,
+		"may":	5,
+		"jun":	6,
+		"jul":	7,
+		"aug":	8,
+		"sep":	9,
+		"oct":	10,
+		"nov":	11,
+		"dec":	12,
+	}
+
+	def __init__(self, source, target_dir):
+		self._source = source
+		self._download_dir = target_dir + "/" + self._sanitize(source["name"])
+		try:
+			os.makedirs(self._download_dir)
+		except FileExistsError:
+			pass
+
+	@classmethod
+	def _sanitize(cls, filename):
+		filename = filename.replace(" ", "_")
+		return cls._PATH_RE.sub("", filename)
+
+	@staticmethod
+	def _file_age(filename):
+		stat = os.stat(filename)
+		return time.time() - stat.st_mtime
+
+	def download_index(self, force = False):
+		index_filename = self._download_dir + "/index.xml"
+
+		if os.path.isfile(index_filename) and (self._file_age(index_filename) < 86400):
+			return
+
+		req = requests.get(self._source["rss"])
+		with open(index_filename, "wb") as f:
+			f.write(req.content)
+
+	def parse_index(self):
+		index_filename = self._download_dir + "/index.xml"
+		xml = XMLParser().parsefile(index_filename)
+		return xml
+
+	def _download(self, uri, outfile):
+		if not os.path.isfile(outfile):
+			print("%s -> %s" % (uri, outfile))
+			req = requests.get(uri)
+			with open(outfile, "wb") as f:
+				f.write(req.content)
+
+	def _parse_pubdate(self, datestr):
+		match = self._DATETIME_RE.fullmatch(datestr)
+		if not match:
+			raise Exception("Unparsable date: %s" % (datestr))
+		match = match.groupdict()
+		year = int(match["year"])
+		month = self._MONTHS[match["month"].lower()]
+		day = int(match["day"])
+		hour = int(match["hour"])
+		minute = int(match["minute"])
+		second = int(match["second"])
+		return datetime.datetime(year, month, day, hour, minute, second)
+
+	def download_all(self, max_age_days = None):
+		self.download_index()
+		xml = self.parse_index()
+		for (iid, item) in enumerate(xml.channel.item, 1):
+			guid = item.guid.getcdata()
+			uri = item.enclosure["url"]
+			name = item.title.getcdata()
+			pubdate = self._parse_pubdate(item.pubDate.getcdata())
+			date_str = pubdate.strftime("%Y_%m_%d_%H_%M")
+			age_days = (datetime.datetime.now() - pubdate).total_seconds() / 86400
+			outfile = "%s/%s-%s.mp3" % (self._download_dir, date_str, self._sanitize(name))
+
+			if (max_age_days is None) or (age_days <= max_age_days):
+				self._download(uri, outfile)
+
+parser = FriendlyArgumentParser(description = "Download podcast audio files from a XML RSS feed.")
+parser.add_argument("-m", "--max-age-days", metavar = "days", type = float, help = "Maximum age in days of the podcasts that should be downloaded. By default, no restriction is applied to the download.")
+parser.add_argument("-o", "--output", metavar = "dir", type = str, default = "podcasts/", help = "Directory which all podcast files are written to. Defaults to %(default)s.")
+parser.add_argument("-v", "--verbose", action = "count", default = 0, help = "Increases verbosity. Can be specified multiple times to increase.")
+parser.add_argument("sources", metavar = "sources", type = str, nargs = "+", help = "Podcast definition source file(s) that should be polled")
+args = parser.parse_args(sys.argv[1:])
+
+for sourcefile in args.sources:
+	with open(sourcefile) as f:
+		sources = json.load(f)
+
+	for source in sources:
+		downloader = PodcastDownloader(source, args.output)
+		downloader.download_all(max_age_days = args.max_age_days)
