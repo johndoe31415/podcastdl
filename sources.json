@@ -18,5 +18,13 @@
 	{
 		"name":		"Crimetown",
 		"rss":		"https://feeds.megaphone.fm/crimetown"
+	},
+	{
+		"name":		"Beste Vaterfreuden",
+		"rss":		"https://beste-vaterfreuden.podigee.io/feed/aac"
+	},
+	{
+		"name":		"Beste Freundinnen",
+		"rss":		"https://beste-freundinnen.podigee.io/feed/aac"
 	}
 ]
